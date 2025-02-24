@@ -12,7 +12,7 @@ print(secret_key)
 app.config['SECRET_KEY'] = secret_key
 
 #database configuration
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Mpodedra@localhost/FoodWasteDb'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Mpodedra@localhost/postgres'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 #initialize SQLAlchemy object
@@ -25,7 +25,7 @@ class User(db.Model):
     __tablename__ = 'users'
     user_id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
+    password = db.Column(db.String(255), nullable=False)
     first_name = db.Column(db.String(50))
     last_name = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
@@ -33,11 +33,11 @@ class User(db.Model):
 
     # Method to set password hash using Passlib (bcrypt)
     def set_password(self, password):
-        self.password_hash = bcrypt.hash(password)
+        self.password = bcrypt.hash(password)
 
     # Method to check password hash
     def check_password(self, password):
-        return bcrypt.verify(password, self.password_hash)
+        return bcrypt.verify(password, self.password)
 
 # Food Item Model
 class FoodItem(db.Model):
@@ -73,6 +73,7 @@ class WasteLogs(db.Model):
 #Analytics Model
 class Analytics(db.Model):
      __tablename__ = 'analytics'
+     analytics_id = db.Column(db.Integer, primary_key=True)
      user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'))
      total_food_added = db.Column(db.Integer)
      total_food_wasted = db.Column(db.Integer)
@@ -131,7 +132,7 @@ def login():
         return jsonify({"message": "Invalid credentials"}), 401
 
 # Route to get all food items
-@app.route('/food-items', methods=['GET'])
+@app.route('/get_food', methods=['GET'])
 def get_food_items():
     food_items = FoodItem.query.all()
     result = []
@@ -151,9 +152,20 @@ def get_food_items():
 #Route to add a food item
 @app.route('/food_items', methods=['POST'])
 def add_food_items():
+
+    if 'user_id' not in session:
+        return jsonify({"error": "User not logged in"}), 401
+
     data = request.get_json()
+
+    # Ensure required fields are provided
+    required_fields = ["name", "quantity", "category_id", "purchase_date", "expiration_date", "storage_method"]
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
+
     new_food_item = FoodItem(
-        user_id=data['user_id'],
+        user_id=session['user_id'],
         name=data['name'],
         quantity=data['quantity'],
         category_id=data['category_id'],
@@ -164,6 +176,18 @@ def add_food_items():
     db.session.add(new_food_item)
     db.session.commit()
     return jsonify({'message': 'Food item added successfully'}), 201
+
+@app.route('/delete_food_items/<int:food_id>', methods=['DELETE'])
+def delete_food_item(food_id):
+    food_item = FoodItem.query.get(food_id)
+
+    if food_item:
+        # Delete the food item from the database
+        db.session.delete(food_item)
+        db.session.commit()
+        return jsonify({'message': 'Food item deleted successfully'}), 200
+    
+    return jsonify({'message': 'Food item not found'}), 404
 
 
 # 4️⃣ Run the App
