@@ -2,9 +2,11 @@ from flask import Flask, request, jsonify, session
 from  flask_sqlalchemy import SQLAlchemy
 from passlib.hash import bcrypt
 import secrets
+from flask_cors import CORS
 
 #initialize the flask app
 app = Flask(__name__)
+CORS(app)
 
 secret_key = secrets.token_hex(16)
 print(secret_key)
@@ -176,6 +178,34 @@ def add_food_items():
     db.session.add(new_food_item)
     db.session.commit()
     return jsonify({'message': 'Food item added successfully'}), 201
+
+#Route to update a food item
+@app.route('/update_food_item/<int:food_id>', methods=['PUT'])
+def update_food_item(food_id):
+    food_item = FoodItem.query.get(food_id)
+
+    if not food_item:
+        return jsonify({'error': 'Food item not found'}), 404
+
+    data = request.get_json()
+
+    # Update only if key exists in request data
+    if 'name' in data:
+        food_item.name = data['name']
+    if 'quantity' in data:
+        food_item.quantity = data['quantity']
+    if 'category_id' in data:
+        food_item.category_id = data['category_id']
+    if 'purchase_date' in data:
+        food_item.purchase_date = data['purchase_date']
+    if 'expiration_date' in data:
+        food_item.expiration_date = data['expiration_date']
+    if 'storage_method' in data:
+        food_item.storage_method = data['storage_method']
+
+    db.session.commit()  # Save changes to DB
+
+    return jsonify({'message': 'Food item updated successfully'}), 200
 
 @app.route('/delete_food_items/<int:food_id>', methods=['DELETE'])
 def delete_food_item(food_id):
