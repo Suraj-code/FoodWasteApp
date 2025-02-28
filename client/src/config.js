@@ -9,6 +9,29 @@ export const getFoodItems = async () => {
       console.error("Error fetching food items:", error);
     }
   };
+
+  export const addUser = async (user) => {
+    try {
+        const response = await fetch(`${BASE_URL}/signup`, {
+            method: "POST",
+            headers: {"Content-Tupe": "application/json" },
+            body: JSON.stringify(user),
+        });
+        return response.json();
+    } catch (error) {
+        console.error("Error adding user:", error)
+    }
+  }
+
+  export const getUsers = async () => {
+    try{
+        const response = await fetch(`${BASE_URL}/get_user`);
+        const data = await response.json();
+        return data;
+    }catch (error) {
+        console.error("Error fetching user:", error);
+    }
+  }
   
   export const addFoodItem = async (foodItem) => {
     try {
