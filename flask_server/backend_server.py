@@ -132,6 +132,19 @@ def login():
         return jsonify({"message": "Login successful"}), 200
     else:
         return jsonify({"message": "Invalid credentials"}), 401
+    
+#Route to get all users
+@app.route('/get_user', methods=['GET'])
+def get_users():
+    list_of_users = User.query.all()
+    result = []
+    for u in list_of_users:
+        result.append({
+            'email': u.email,
+            'first_name': u.first_name,
+            'last_name': u.last_name
+        })
+    return jsonify(result)
 
 # Route to get all food items
 @app.route('/get_food', methods=['GET'])
