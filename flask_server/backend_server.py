@@ -2,16 +2,21 @@ from flask import Flask, request, jsonify, session
 from  flask_sqlalchemy import SQLAlchemy
 from passlib.hash import bcrypt
 import secrets
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from flask_cors import CORS
 
 #initialize the flask app
 app = Flask(__name__)
 CORS(app)
 
-secret_key = secrets.token_hex(16)
-print(secret_key)
+app.config['SECRET_KEY'] = 'vhwiufhwoiery289570138rweighskdj'
+app.config["JWT_SECRET_KEY"] = 'adfhoifhoewiy78934750948roijgfkl'
+app.config['JWT_TOKEN_LOCATION'] = ['headers']
 
-app.config['SECRET_KEY'] = secret_key
+jwt = JWTManager(app)
+
+
+
 
 #database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://postgres:Mpodedra@localhost/postgres'
@@ -120,22 +125,22 @@ def signup():
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
-
+    
     # Find user by email
     user = User.query.filter_by(email=data['email']).first()
     
     if user and user.check_password(data['password']):
-        # Set session to keep user logged in (example of keeping user logged in)
-        session['user_id'] = user.user_id
-        session['email'] = user.email
-        
-        return jsonify({"message": "Login successful"}), 200
-    else:
-        return jsonify({"message": "Invalid credentials"}), 401
+        # Create JWT token
+        access_token = create_access_token(identity=user.user_id)
+        return jsonify({"message": "Login successful", "access_token": access_token}), 200
+
+    return jsonify({"message": "Invalid credentials"}), 401
     
 #Route to get all users
 @app.route('/get_user', methods=['GET'])
+@jwt_required()
 def get_users():
+    user_id = get_jwt_identity
     list_of_users = User.query.all()
     result = []
     for u in list_of_users:
@@ -148,7 +153,9 @@ def get_users():
 
 # Route to get all food items
 @app.route('/get_food', methods=['GET'])
+@jwt_required()
 def get_food_items():
+    user_id = get_jwt_identity()
     food_items = FoodItem.query.all()
     result = []
     for item in food_items:
@@ -166,7 +173,10 @@ def get_food_items():
 
 #Route to add a food item
 @app.route('/food_items', methods=['POST'])
+@jwt_required()
 def add_food_items():
+
+    user_id = get_jwt_identity()
 
     if 'user_id' not in session:
         return jsonify({"error": "User not logged in"}), 401
@@ -194,6 +204,7 @@ def add_food_items():
 
 #Route to update a food item
 @app.route('/update_food_item/<int:food_id>', methods=['PUT'])
+@jwt_required()
 def update_food_item(food_id):
     food_item = FoodItem.query.get(food_id)
 
@@ -221,6 +232,7 @@ def update_food_item(food_id):
     return jsonify({'message': 'Food item updated successfully'}), 200
 
 @app.route('/delete_food_items/<int:food_id>', methods=['DELETE'])
+@jwt_required()
 def delete_food_item(food_id):
     food_item = FoodItem.query.get(food_id)
 
