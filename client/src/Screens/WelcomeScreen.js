@@ -6,10 +6,10 @@ function WelcomeScreen(props) {
         <View style={styles.container}>
             <Text style={styles.text}>Welcome to my Food App!</Text>
             <View style={styles.buttonContainer}>
-                <Button title="Login" onPress={() => console.log("Login Pressed")} />
+                <Button title="Login" onPress={() => props.navigation.navigate('Login')} />
             </View>
             <View style={styles.buttonContainer}>
-                <Button title="Signup" onPress={() => console.log("Signup Pressed")} />
+                <Button title="Signup" onPress={() => props.navigation.navigate('Signup')} />
             </View>
         </View>
     );
