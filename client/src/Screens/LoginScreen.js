@@ -9,18 +9,20 @@ function LoginScreen(props) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
+    const navigation = useNavigation();
+
     const handleLogin = async () => {
         
         try {
-            const response = await axios.post('http://127.0.0.1:5000/login', {
+            const response = await axios.post('http://10.0.2.2:5000/login', {
                 email,
                 password
             });
 
-            if (response.status == 200) {
+            if (response.status === 200) {
                 await AsyncStorage.setItem('token', response.data.access_token);
                 Alert.alert('Login successful!')
-                // props.navigation.navigate('home');
+                navigation.navigate('Welcome');
             }
         } catch (error) {
             if (error.response) {
@@ -30,7 +32,6 @@ function LoginScreen(props) {
             }
         }
 
-        const navigation = useNavigation();
     }
 
     return (
@@ -39,18 +40,22 @@ function LoginScreen(props) {
                 <Card.Title title="Login" titleStyle={styles.title}></Card.Title>
                 <Card.Content>
                     <TextInput
-                        placeholder='Email' 
+                        placeholder='Email'
+                        value={email}
+                        onChangeText={setEmail} 
                         style={styles.txtInput}
                     />
                     <TextInput 
                         secureTextEntry={true}
                         placeholder='Password'
+                        value={password}
+                        onChangeText={setPassword}
                         style={styles.txtInput}
                     />
-                    <TouchableOpacity style={styles.btnStyle} onPress={() => navigation.navigate('Welcome')}>
+                    <TouchableOpacity style={styles.btnStyle} onPress={handleLogin}>
                         <Text style={styles.btnText}>Login</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
                         <Text style={styles.btnSignup}>Don't have an account? Click here to Sign up</Text>
                     </TouchableOpacity>
                 </Card.Content>
