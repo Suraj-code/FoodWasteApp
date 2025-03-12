@@ -1,3 +1,15 @@
 {
   "extends": "@react-native/typescript-config/tsconfig.json"
 }
+// {
+//   "compilerOptions": {
+//     "jsx": "react-native",
+//     "esModuleInterop": true,
+//     "skipLibCheck": true,
+//     "forceConsistentCasingInFileNames": true,
+//     "allowSyntheticDefaultImports": true,
+//     "include": [
+//       "node_modules/@mpen/jsxhtml/jsx.d.ts"
+//     ]
+//   }
+// }
