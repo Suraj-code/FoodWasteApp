@@ -22,7 +22,7 @@ function LoginScreen(props) {
             if (response.status === 200) {
                 await AsyncStorage.setItem('token', response.data.access_token);
                 Alert.alert('Login successful!')
-                navigation.navigate('Welcome');
+                navigation.navigate('Main');
             }
         } catch (error) {
             if (error.response) {
