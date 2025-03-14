@@ -20,15 +20,26 @@ function LoginScreen(props) {
             });
 
             if (response.status === 200) {
-                await AsyncStorage.setItem('token', response.data.access_token);
+                console.log('Response Data:', response.data);
+                const authToken = response.data.access_token
+                await AsyncStorage.setItem('token', authToken);
                 Alert.alert('Login successful!')
                 navigation.navigate('Main');
             }
         } catch (error) {
+            // Enhanced error handling
             if (error.response) {
-                Alert.alert(error.response.data.message);
-            }else {
-                Alert.alert('An error occured')
+              // If the error is from the server (4xx or 5xx response)
+              console.log('Response error:', error.response);
+              Alert.alert(`Error: ${error.response.data.message || error.response.statusText}`);
+            } else if (error.request) {
+              // If the request was made but no response was received
+              console.log('Request error:', error.request);
+              Alert.alert('No response received from server.');
+            } else {
+              // If the error is something else
+              console.log('Error message:', error.message);
+              Alert.alert('An error occurred');
             }
         }
 

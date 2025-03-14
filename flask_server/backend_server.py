@@ -151,6 +151,18 @@ def get_users():
         })
     return jsonify(result)
 
+#Get Category names
+@app.route('/get_category', methods=['GET'])
+def get_category():
+    category_names = Category.query.all()
+    result = []
+    for item in category_names:
+        result.append({
+            'category_id': item.category_id,
+            'name': item.name
+        })
+    return jsonify(result)
+
 # Route to get all food items
 @app.route('/get_food', methods=['GET'])
 @jwt_required()
@@ -164,6 +176,7 @@ def get_food_items():
             'user_id': item.user_id,
             'name': item.name,
             'quantity': item.quantity,
+            'category_id': item.category_id,
             'purchase_date': item.purchase_date,
             'expiration_date': item.expiration_date,
             'storage_method': item.storage_method,

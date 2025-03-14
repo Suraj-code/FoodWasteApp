@@ -1,14 +1,33 @@
-const BASE_URL = "http://127.0.0.1:5000";
+const BASE_URL = "http://10.0.2.2:5000";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const getFoodItems = async () => {
     try {
-      const response = await fetch(`${BASE_URL}/get_food`);
-      const data = await response.json();
-      return data;
+        // Retrieve the stored JWT token
+        const token = await AsyncStorage.getItem("token"); // or wherever your token is stored
+
+        if (!token) {
+            throw new Error("User is not authenticated. Please log in.");
+        }
+
+        const response = await fetch(`${BASE_URL}/get_food`, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`, // Pass the token in the header
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP Error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data;
     } catch (error) {
-      console.error("Error fetching food items:", error);
+        console.error("Error fetching food items:", error);
     }
-  };
+};
 
   export const addUser = async (user) => {
     try {
@@ -30,6 +49,16 @@ export const getFoodItems = async () => {
         return data;
     }catch (error) {
         console.error("Error fetching user:", error);
+    }
+  }
+
+  export const getCategoryNames = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/get_category`);
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching categories:",error)
     }
   }
   
