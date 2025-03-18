@@ -111,6 +111,12 @@ const PantryScreen = () => {
           </View>
         )}
       />
+      <TouchableOpacity
+        onPress={() => console.log("+ pressed")}
+        style={styles.addBtn}
+      >
+        <Ionicons name={"add-circle"} size={30} color={"black"} />
+      </TouchableOpacity>
     </View>
   );
 };
@@ -169,6 +175,10 @@ const styles = StyleSheet.create({
     backgroundColor: "red",
     padding: 5,
     borderRadius: 5,
+  },
+  addBtn: {
+    alignItems: "flex-end",
+    justifyContent: "flex-end",
   },
   btnText: {
     color: "#fff",

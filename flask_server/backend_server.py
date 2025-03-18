@@ -191,7 +191,7 @@ def add_food_items():
 
     user_id = get_jwt_identity()
 
-    if 'user_id' not in session:
+    if not user_id:
         return jsonify({"error": "User not logged in"}), 401
 
     data = request.get_json()
@@ -203,7 +203,7 @@ def add_food_items():
             return jsonify({"error": f"Missing required field: {field}"}), 400
 
     new_food_item = FoodItem(
-        user_id=session['user_id'],
+        user_id=user_id,
         name=data['name'],
         quantity=data['quantity'],
         category_id=data['category_id'],
