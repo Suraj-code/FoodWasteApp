@@ -54,6 +54,11 @@ export const getFoodItems = async () => {
 
   export const getCategoryNames = async () => {
     try {
+      const token = await AsyncStorage.getItem("token"); // or wherever your token is stored
+
+        if (!token) {
+            throw new Error("User is not authenticated. Please log in.");
+        }
       const response = await fetch(`${BASE_URL}/get_category`);
       const data = await response.json();
       return data;
@@ -64,6 +69,11 @@ export const getFoodItems = async () => {
   
   export const addFoodItem = async (foodItem) => {
     try {
+      const token = await AsyncStorage.getItem("token"); // or wherever your token is stored
+
+        if (!token) {
+            throw new Error("User is not authenticated. Please log in.");
+        }
       const response = await fetch(`${BASE_URL}/food_items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
