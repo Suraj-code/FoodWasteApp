@@ -76,7 +76,7 @@ export const getFoodItems = async () => {
         }
       const response = await fetch(`${BASE_URL}/food_items`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify(foodItem),
       });
       return response.json();
@@ -84,3 +84,39 @@ export const getFoodItems = async () => {
       console.error("Error adding food item:", error);
     }
   };
+
+  export const deleteFoodItem = async (food_id) => {
+    try {
+      const token = await AsyncStorage.getItem("token"); // or wherever your token is stored
+
+        if (!token) {
+            throw new Error("User is not authenticated. Please log in.");
+        }
+      const response = await fetch(`${BASE_URL}/delete_food_items/${food_id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify(food_id),
+      });
+      return response.json();
+    } catch (error) {
+      console.error("Error deleting food item:", error);
+    }
+  }
+
+  export const updateFoodItem = async (food_id, new_data) => {
+    try {
+      const token = await AsyncStorage.getItem("token"); // or wherever your token is stored
+
+        if (!token) {
+            throw new Error("User is not authenticated. Please log in.");
+        }
+        const response = await fetch(`${BASE_URL}/update_food_item/${food_id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+          body: JSON.stringify(new_data),
+        });
+        return response.json();
+    } catch (error) {
+      console.error("Error updating food item:", error);
+    }
+  }

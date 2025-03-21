@@ -213,7 +213,13 @@ def add_food_items():
     )
     db.session.add(new_food_item)
     db.session.commit()
-    return jsonify({'message': 'Food item added successfully'}), 201
+    return jsonify({'name': new_food_item.name,
+                    'quantity': new_food_item.quantity,
+                    'category_id': new_food_item.category_id,
+                    'purchase_date': new_food_item.purchase_date,
+                    'expiration_date': new_food_item.expiration_date,
+                    'storage_method': new_food_item.storage_method
+                    }), 201
 
 #Route to update a food item
 @app.route('/update_food_item/<int:food_id>', methods=['PUT'])
@@ -242,7 +248,12 @@ def update_food_item(food_id):
 
     db.session.commit()  # Save changes to DB
 
-    return jsonify({'message': 'Food item updated successfully'}), 200
+    return jsonify({'name': food_item.name,
+                    'qunatity': food_item.quantity,
+                    'category_id': food_item.category_id,
+                    'purchase_date': food_item.purchase_date,
+                    'expiration_date': food_item.expiration_date,
+                    'storage_method': food_item.storage_method}), 200
 
 @app.route('/delete_food_items/<int:food_id>', methods=['DELETE'])
 @jwt_required()
