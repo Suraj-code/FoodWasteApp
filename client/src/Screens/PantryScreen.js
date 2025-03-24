@@ -8,11 +8,16 @@ import { getCategoryNames } from "../../config";
 import { addFoodItem } from "../../config";
 import { deleteFoodItem } from "../../config";
 import { updateFoodItem } from "../../config";
+// import { DateTimePicker } from "@react-native-community/datetimepicker";
+import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 
 
 const PantryScreen = () => {
   const [pantryData, setPantryData] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [isDPVisible, setIsDPVisible] = useState(false);
+  const [date, setDate] = useState(new Date());
+  const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editFoodId, setEditFoodId] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -87,7 +92,7 @@ const PantryScreen = () => {
       fetchData();
       setModalVisible(false);
       setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
-      setIsEditing(false);
+      // setIsEditing(false);
     }
     
   };
@@ -171,14 +176,42 @@ const PantryScreen = () => {
             : category
         )
       );
-  
-      fetchData(); 
+      setIsEditing(false); 
+      setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
+      fetchData();
+      
   
     } catch (error) {
       console.error("Error updating item:", error);
       Alert.alert("Error", "Failed to update item. Please try again.");
     }
   };
+
+  // const handleDateChange = (field, selectedDate) => {
+  //   console.log("Selected Date:", selectedDate);
+  //   setFormData((prevData) => ({
+  //     ...prevData, // Keep existing data
+  //     [field]: selectedDate.toISOString().split("T")[0], // Format date to YYYY-MM-DD
+  //   }));
+  //   setIsDPVisible(false);
+  // };
+  
+  const showDatePicker = (field) => {
+    DateTimePickerAndroid.open({
+      value: date,
+      mode: "date",
+      display: "default",
+      onChange: (event, selectedDate) => {
+        if (selectedDate) {
+          setFormData((prevData) => ({
+            ...prevData,
+            [field]: selectedDate.toISOString().split("T")[0], // Store as YYYY-MM-DD
+          }));
+        }
+      },
+    });
+  };
+  
 
   return (
     <ScrollView style={styles.container}>
@@ -204,8 +237,8 @@ const PantryScreen = () => {
                 renderItem={({ item: subItem }) => (
                   <View style={styles.row}>
                     <Text style={styles.cell}>{subItem.name}</Text>
-                    <Text style={styles.cell}>{new Date(subItem.purchase_date).toLocaleDateString()}</Text>
-                    <Text style={styles.cell}>{new Date(subItem.expiration_date).toLocaleDateString()}</Text>
+                    <Text style={styles.cell}>{new Date(subItem.purchase_date).toISOString().split("T")[0]}</Text>
+                    <Text style={styles.cell}>{new Date(subItem.expiration_date).toISOString().split("T")[0]}</Text>
                     <View style={styles.actions}>
                       <TouchableOpacity
                         onPress={() => handleEdit(subItem)}
@@ -254,8 +287,15 @@ const PantryScreen = () => {
                 }}
               />
               
-              <TextInput style={styles.input} placeholder="Purchase Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("purchase_date", text)} value={formData.purchase_date} />
-              <TextInput style={styles.input} placeholder="Expiration Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("expiration_date", text)} value={formData.expiration_date} />
+              {/* <TextInput style={styles.input} placeholder="Purchase Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("purchase_date", text)} value={formData.purchase_date} />
+              <TextInput style={styles.input} placeholder="Expiration Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("expiration_date", text)} value={formData.expiration_date} /> */}
+              
+              <TouchableOpacity onPress={() => showDatePicker("purchase_date")}>
+                <TextInput style={styles.input} placeholder="Purchase Date" value={formData.purchase_date} editable={false} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => showDatePicker("expiration_date")}>
+                <TextInput style={styles.input} placeholder="Expiry Date" value={formData.expiration_date} editable={false} />
+              </TouchableOpacity>
               <TextInput style={styles.input} placeholder="Storage Method" onChangeText={(text) => handleChange("storage_method", text)} value={formData.storage_method} />
 
               <View style={styles.buttonContainer}>
