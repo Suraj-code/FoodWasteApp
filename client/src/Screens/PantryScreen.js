@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, Button, ScrollView, Alert } from "react-native";
+import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, Button, ScrollView, Alert, ActivityIndicator, RefreshControl } from "react-native";
 import { Text } from "react-native-paper";
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Dropdown } from "react-native-element-dropdown";
@@ -29,6 +29,10 @@ const PantryScreen = () => {
     expiration_date: "",
     storage_method: "",
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
+  const [refreshing, setRefreshing] = useState(false);
 
   //fetch data from the backend
   useEffect(() => {
@@ -37,32 +41,45 @@ const PantryScreen = () => {
   }, []);
 
   const fetchData = async () => {
-    const data = await getFoodItems();
-    console.log("Fetched Food Items:", data);
+    try {
+      setIsLoading(true);
+      setError(null);
+      console.log("Fetching data...");
+      
+      const data = await getFoodItems();
+      console.log("Fetched Food Items:", data);
 
-    // Fetch category names
-    const categories = await getCategoryNames();
-    console.log("Fetched Categories:", categories);
+      const categories = await getCategoryNames();
+      console.log("Fetched Categories:", categories);
 
-    // Group food items by category and associate category names
-    if (data.length > 0 && categories.length > 0) {
-      const groupedData = groupByCategory(data, categories);
-      console.log(groupedData);
-      setPantryData(groupedData);
+      if (data && categories) {
+        const groupedData = groupByCategory(data, categories);
+        console.log("Grouped Data:", groupedData);
+        setPantryData(groupedData);
+      } else {
+        throw new Error("Invalid data received from server");
+      }
+    } catch (err) {
+      console.error("Error in fetchData:", err);
+      setError("Failed to fetch pantry data. Please try again later.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const fetchCategories = async () => {
     try {
-      const data = await getCategoryNames(); // getCategoryNames should return an array of categories
+      setError(null);
+      const data = await getCategoryNames();
       console.log("Fetched Categories:", data);
   
       if (Array.isArray(data)) {
         setCategories(data.map(cat => ({ label: cat.name, value: cat.category_id.toString() })));
       } else {
-        console.error("Categories data is not an array:", data);
+        throw new Error("Invalid categories data format");
       }
     } catch (error) {
+      setError("Failed to fetch categories. Please try again later.");
       console.error("Error fetching categories:", error);
     }
   };
@@ -72,29 +89,64 @@ const PantryScreen = () => {
     setFormData({ ...formData, [name]: value });
   };
 
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!formData.name.trim()) {
+      errors.name = "Name is required";
+    }
+    
+    if (!formData.quantity.trim()) {
+      errors.quantity = "Quantity is required";
+    } else if (isNaN(formData.quantity) || Number(formData.quantity) <= 0) {
+      errors.quantity = "Quantity must be a positive number";
+    }
+    
+    if (!formData.category_id) {
+      errors.category_id = "Category is required";
+    }
+    
+    if (!formData.purchase_date) {
+      errors.purchase_date = "Purchase date is required";
+    }
+    
+    if (!formData.expiration_date) {
+      errors.expiration_date = "Expiration date is required";
+    } else if (formData.expiration_date < formData.purchase_date) {
+      errors.expiration_date = "Expiration date must be after purchase date";
+    }
+    
+    if (!formData.storage_method.trim()) {
+      errors.storage_method = "Storage method is required";
+    }
+
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     if (isEditing) {
       await updateItem(editFoodId, formData);
       setModalVisible(false);
     } else {
       const newItem = await addFoodItem(formData);
       console.log("New Food Item:", newItem);
-      console.log("Form Data:", newItem.category_id);
-      
       
       setPantryData((prevData) =>
         prevData.map((category) =>
           category.title === newItem.title
-            ? { ...category, data: [...category.data, newItem] } // Add to correct category
+            ? { ...category, data: [...category.data, newItem] }
             : category
         )
       );
-      fetchData();
       setModalVisible(false);
       setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
-      // setIsEditing(false);
+      setFormErrors({});
     }
-    
   };
 
    // Function to group food items by category
@@ -123,18 +175,38 @@ const PantryScreen = () => {
     }));
   };
 
-  const removeItem = async (category,itemId) => {
-    const data = await deleteFoodItem(itemId);
+  const removeItem = async (category, itemId) => {
+    try {
+      console.log("Attempting to delete item:", itemId, "from category:", category);
+      
+      // Make the API call first
+      const response = await deleteFoodItem(itemId);
+      console.log("Delete API response:", response);
+      
+      if (!response) {
+        Alert.alert("Error", "Failed to delete item. Please try again.");
+        return;
+      }
 
-    Alert.alert("Item Removed", "Item has been removed from the pantry")
-    setPantryData((prevData) =>
-      prevData.map((section) =>
-        section.title === category
-          ? { ...section, data: section.data.filter((item) => item.id !== itemId) }
-          : section
-      )
-    );
-    fetchData();
+      // Only update the state after successful API call
+      setPantryData((prevData) => {
+        return prevData.map((section) => {
+          if (section.title === category) {
+            return {
+              ...section,
+              data: section.data.filter((item) => item.food_id !== itemId)
+            };
+          }
+          return section;
+        });
+      });
+
+      Alert.alert("Success", "Item has been removed from the pantry");
+      
+    } catch (error) {
+      console.error("Error in removeItem:", error);
+      Alert.alert("Error", "Failed to delete item. Please try again.");
+    }
   };
 
   const handleEdit = (item) => {
@@ -165,21 +237,20 @@ const PantryScreen = () => {
       Alert.alert("Item Updated", "Item has been updated in the pantry");
   
       setPantryData((prevData) =>
-        prevData.map((category) =>
-          category.title === data.title
-            ? { 
-                ...category, 
-                data: category.data.map((item) => 
-                  item.id === itemId ? { ...item, ...data } : item 
-                ) 
-              }
-            : category
-        )
+        prevData.map((category) => ({
+          ...category,
+          data: category.data.map((item) => 
+            item.food_id === itemId ? { ...item, ...data } : item
+          )
+        }))
       );
+      
       setIsEditing(false); 
       setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
-      fetchData();
+      setModalVisible(false);
       
+      // Refresh data to ensure consistency
+      fetchData();
   
     } catch (error) {
       console.error("Error updating item:", error);
@@ -213,52 +284,97 @@ const PantryScreen = () => {
   };
   
 
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchData();
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       <View>
-        <FlatList
-          data={pantryData}
-          scrollEnabled={false}
-          keyExtractor={(item) => item.category_id}
-          renderItem={({ item }) => (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>{item.title}</Text>
-              {/* Table Header */}
-              <View style={styles.headerRow}>
-                <Text style={[styles.cell, styles.header]}>item</Text>
-                <Text style={[styles.cell, styles.header]}>Date Added</Text>
-                <Text style={[styles.cell, styles.header]}>Expiry Date</Text>
-                <Text style={[styles.cell, styles.header]}>Actions</Text>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#0000ff" />
+            <Text style={styles.loadingText}>Loading pantry data...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Button title="Retry" onPress={fetchData} />
+          </View>
+        ) : (
+          <FlatList
+            data={pantryData}
+            scrollEnabled={false}
+            keyExtractor={(item) => item.title}
+            renderItem={({ item }) => (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>{item.title}</Text>
+                {/* Table Header */}
+                <View style={styles.headerRow}>
+                  <Text style={[styles.cell, styles.header]}>item</Text>
+                  <Text style={[styles.cell, styles.header]}>Date Added</Text>
+                  <Text style={[styles.cell, styles.header]}>Expiry Date</Text>
+                  <Text style={[styles.cell, styles.header]}>Actions</Text>
+                </View>
+                {/* Table Content */}
+                <FlatList
+                  data={item.data}
+                  keyExtractor={(subItem) => subItem.food_id.toString()}
+                  renderItem={({ item: subItem }) => {
+                    const isItemExpired = isExpired(subItem.expiration_date);
+                    return (
+                      <View style={[styles.row, isItemExpired && styles.expiredRow]}>
+                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{subItem.name}</Text>
+                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{new Date(subItem.purchase_date).toISOString().split("T")[0]}</Text>
+                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{new Date(subItem.expiration_date).toISOString().split("T")[0]}</Text>
+                        <View style={styles.actions}>
+                          <TouchableOpacity
+                            onPress={() => handleEdit(subItem)}
+                          >
+                            <Ionicons name={"pencil"} size={18} color={isItemExpired ? "red" : "black"} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              Alert.alert(
+                                "Delete Item",
+                                "Are you sure you want to delete this item?",
+                                [
+                                  {
+                                    text: "Cancel",
+                                    style: "cancel"
+                                  },
+                                  {
+                                    text: "Delete",
+                                    onPress: () => removeItem(item.title, subItem.food_id),
+                                    style: "destructive"
+                                  }
+                                ]
+                              );
+                            }}
+                          >
+                            <Ionicons name={"trash-outline"} size={18} color={isItemExpired ? "red" : "black"} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  }}
+                />
               </View>
-              {/* Table Content */}
-              <FlatList
-                data={item.data}
-                keyExtractor={(subItem) => subItem.food_id}
-                renderItem={({ item: subItem }) => (
-                  <View style={styles.row}>
-                    <Text style={styles.cell}>{subItem.name}</Text>
-                    <Text style={styles.cell}>{new Date(subItem.purchase_date).toISOString().split("T")[0]}</Text>
-                    <Text style={styles.cell}>{new Date(subItem.expiration_date).toISOString().split("T")[0]}</Text>
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        onPress={() => handleEdit(subItem)}
-                        // style={styles.editBtn}
-                      >
-                        <Ionicons name={"pencil"} size={18} color={"black"} />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => removeItem(item.title, subItem.food_id)}
-                        // style={styles.removeBtn}
-                      >
-                        <Ionicons name={"trash-outline"} size={18} color={"black"} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              />
-            </View>
-          )}
-        />
+            )}
+          />
+        )}
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
           style={styles.addBtn}
@@ -269,39 +385,91 @@ const PantryScreen = () => {
         <Modal visible={modalVisible} animationType="slide" transparent={true}>
           <View style={styles.modalContainer}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Add Food Item</Text>
+              <Text style={styles.modalTitle}>{isEditing ? "Edit Food Item" : "Add Food Item"}</Text>
+              
+              <ScrollView style={styles.modalScroll}>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Name</Text>
+                  <TextInput 
+                    style={[styles.input, formErrors.name && styles.inputError]} 
+                    placeholder="Enter item name" 
+                    onChangeText={(text) => handleChange("name", text)} 
+                    value={formData.name}
+                  />
+                  {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
+                </View>
 
-              <TextInput style={styles.input} placeholder="Name" onChangeText={(text) => handleChange("name", text)} value={formData.name} />
-              <TextInput style={styles.input} placeholder="Quantity" onChangeText={(text) => handleChange("quantity", text)} value={formData.quantity} keyboardType="numeric" />
-              
-              <Dropdown
-                style={styles.dropdown}
-                data={categories}
-                labelField="label"
-                valueField="value"
-                placeholder="Select Category"
-                value={formData.category_id}
-                onChange={(item) => {
-                  console.log("Selected Category:", item);
-                  handleChange("category_id", item.value)
-                }}
-              />
-              
-              {/* <TextInput style={styles.input} placeholder="Purchase Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("purchase_date", text)} value={formData.purchase_date} />
-              <TextInput style={styles.input} placeholder="Expiration Date (YYYY-MM-DD)" onChangeText={(text) => handleChange("expiration_date", text)} value={formData.expiration_date} /> */}
-              
-              <TouchableOpacity onPress={() => showDatePicker("purchase_date")}>
-                <TextInput style={styles.input} placeholder="Purchase Date" value={formData.purchase_date} editable={false} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => showDatePicker("expiration_date")}>
-                <TextInput style={styles.input} placeholder="Expiry Date" value={formData.expiration_date} editable={false} />
-              </TouchableOpacity>
-              <TextInput style={styles.input} placeholder="Storage Method" onChangeText={(text) => handleChange("storage_method", text)} value={formData.storage_method} />
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Quantity</Text>
+                  <TextInput 
+                    style={[styles.input, formErrors.quantity && styles.inputError]} 
+                    placeholder="Enter quantity" 
+                    onChangeText={(text) => handleChange("quantity", text)} 
+                    value={formData.quantity} 
+                    keyboardType="numeric"
+                  />
+                  {formErrors.quantity && <Text style={styles.errorText}>{formErrors.quantity}</Text>}
+                </View>
 
-              <View style={styles.buttonContainer}>
-                <Button title="Cancel" color="red" onPress={() => setModalVisible(false)} />
-                <Button title="Add Item" onPress={handleSubmit} />
-              </View>
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Category</Text>
+                  <Dropdown
+                    style={[styles.dropdown, formErrors.category_id && styles.inputError]}
+                    data={categories}
+                    labelField="label"
+                    valueField="value"
+                    placeholder="Select Category"
+                    value={formData.category_id}
+                    onChange={(item) => handleChange("category_id", item.value)}
+                  />
+                  {formErrors.category_id && <Text style={styles.errorText}>{formErrors.category_id}</Text>}
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Purchase Date</Text>
+                  <TouchableOpacity onPress={() => showDatePicker("purchase_date")}>
+                    <TextInput 
+                      style={[styles.input, formErrors.purchase_date && styles.inputError]} 
+                      placeholder="Select purchase date" 
+                      value={formData.purchase_date} 
+                      editable={false}
+                    />
+                  </TouchableOpacity>
+                  {formErrors.purchase_date && <Text style={styles.errorText}>{formErrors.purchase_date}</Text>}
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Expiry Date</Text>
+                  <TouchableOpacity onPress={() => showDatePicker("expiration_date")}>
+                    <TextInput 
+                      style={[styles.input, formErrors.expiration_date && styles.inputError]} 
+                      placeholder="Select expiry date" 
+                      value={formData.expiration_date} 
+                      editable={false}
+                    />
+                  </TouchableOpacity>
+                  {formErrors.expiration_date && <Text style={styles.errorText}>{formErrors.expiration_date}</Text>}
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={styles.label}>Storage Method</Text>
+                  <TextInput 
+                    style={[styles.input, formErrors.storage_method && styles.inputError]} 
+                    placeholder="Enter storage method" 
+                    onChangeText={(text) => handleChange("storage_method", text)} 
+                    value={formData.storage_method}
+                  />
+                  {formErrors.storage_method && <Text style={styles.errorText}>{formErrors.storage_method}</Text>}
+                </View>
+
+                <View style={styles.buttonContainer}>
+                  <Button title="Cancel" color="red" onPress={() => {
+                    setModalVisible(false);
+                    setFormErrors({});
+                  }} />
+                  <Button title={isEditing ? "Update" : "Add"} onPress={handleSubmit} />
+                </View>
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -375,11 +543,61 @@ const styles = StyleSheet.create({
   },
   addButton: { position: "absolute", bottom: 20, right: 20 },
   modalContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
-  modalContent: { backgroundColor: "white", padding: 20, borderRadius: 10, width: "80%" },
+  modalContent: { 
+    backgroundColor: "white", 
+    padding: 20, 
+    borderRadius: 10, 
+    width: "90%",
+    maxHeight: '90%',
+  },
   modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10 },
   input: { borderWidth: 1, borderColor: "#ccc", padding: 10, marginBottom: 10, width: "100%" },
   dropdown: { borderWidth: 1, borderColor: "#ccc", padding: 10, marginBottom: 10, width: "100%", borderRadius: 5 },
   buttonContainer: { flexDirection: "row", justifyContent: "space-between" },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: 'red',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  expiredRow: {
+    backgroundColor: '#fff0f0',
+  },
+  expiredText: {
+    color: 'red',
+  },
+  modalScroll: {
+    maxHeight: '80%',
+  },
+  formGroup: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
+    fontWeight: '500',
+  },
+  inputError: {
+    borderColor: 'red',
+    borderWidth: 1,
+  },
 });
 
 export default PantryScreen;
