@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, Button, ScrollView, Alert, ActivityIndicator, RefreshControl } from "react-native";
-import { Text } from "react-native-paper";
+import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, Button, ScrollView, Alert, ActivityIndicator, RefreshControl, Animated } from "react-native";
+import { Text, useTheme } from "react-native-paper";
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Dropdown } from "react-native-element-dropdown";
 import { getFoodItems } from "../../config";
@@ -11,6 +11,142 @@ import { updateFoodItem } from "../../config";
 // import { DateTimePicker } from "@react-native-community/datetimepicker";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 
+// Add color mapping for categories
+const categoryColors = {
+  'Dairy Products': '#4c669f',      // Blue
+  'Meat & Poultry': '#ff4444',       // Red
+  'Fruits': '#00C851',    // Green
+  'Grains & Cereals': '#ffbb33',     // Yellow
+  'Snacks': '#aa66cc',     // Purple
+  'Beverages': '#33b5e5',  // Light Blue
+  'Vegetables': '#2BBBAD',     // Teal
+  'Canned Goods': '#ff8800',     // Orange
+  'Baked Goods': '#ff3547',     // Pink
+  'Seafood': '#64b5f6',    // Light Blue
+  'Ready-to-Eat Meals': '#795548',    // Brown
+  'Spices & Herbs': '#9C27B0',    // Deep Purple
+  'Nuts & Seeds': '#8D6E63',    // Light Brown
+  'Frozen Foods': '#00BCD4',    // Cyan
+  'Sauces & Condiments': '#E91E63',    // Magenta
+  'Uncategorized': '#607D8B'    // Blue Grey
+};
+
+// Add category icons mapping
+const categoryIcons = {
+  'Dairy Products': 'nutrition',
+  'Meat & Poultry': 'restaurant',
+  'Fruits': 'leaf',
+  'Grains & Cereals': 'basket',
+  'Snacks': 'fast-food',
+  'Beverages': 'cafe',
+  'Vegetables': 'leaf',
+  'Canned Goods': 'can',
+  'Baked Goods': 'bread',
+  'Seafood': 'fish',
+  'Ready-to-Eat Meals': 'restaurant',
+  'Spices & Herbs': 'flask',
+  'Nuts & Seeds': 'nutrition',
+  'Frozen Foods': 'snow',
+  'Sauces & Condiments': 'flask',
+  'Uncategorized': 'cube'
+};
+
+// Create a separate component for the category section
+const CategorySection = ({ category, handleEdit, removeItem }) => {
+  const fadeAnim = React.useRef(new Animated.Value(0)).current;
+  const categoryColor = categoryColors[category.title] || categoryColors['Uncategorized'];
+  const categoryIcon = categoryIcons[category.title] || 'cube';
+
+  React.useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+      <View style={[styles.sectionHeader, { backgroundColor: categoryColor }]}>
+        <View style={styles.sectionHeaderLeft}>
+          <View style={styles.iconContainer}>
+            <Ionicons name={categoryIcon} size={24} color="#fff" />
+          </View>
+          <Text style={styles.sectionTitle}>{category.title}</Text>
+        </View>
+        <View style={styles.sectionHeaderRight}>
+          <View style={[styles.itemCountBadge, { backgroundColor: categoryColor + '40' }]}>
+            <Text style={styles.itemCountBadgeText}>{category.data.length}</Text>
+          </View>
+        </View>
+      </View>
+      
+      <View style={styles.tableContainer}>
+        <View style={styles.headerRow}>
+          <Text style={styles.headerCell}>Item</Text>
+          <Text style={styles.headerCell}>Added</Text>
+          <Text style={styles.headerCell}>Expires</Text>
+          <Text style={styles.headerCell}>Actions</Text>
+        </View>
+        
+        <FlatList
+          data={category.data}
+          keyExtractor={(item) => item.food_id.toString()}
+          renderItem={({ item }) => {
+            const isExpired = new Date(item.expiration_date) < new Date();
+            const isExpiringSoon = new Date(item.expiration_date) < new Date(new Date().setDate(new Date().getDate() + 7));
+            
+            return (
+              <View style={[
+                styles.row,
+                isExpired && styles.expiredRow,
+                isExpiringSoon && !isExpired && styles.expiringSoonRow
+              ]}>
+                <Text style={[styles.cell, isExpired && styles.expiredText]}>{item.name}</Text>
+                <Text style={[styles.cell, isExpired && styles.expiredText]}>
+                  {new Date(item.purchase_date).toLocaleDateString()}
+                </Text>
+                <Text style={[styles.cell, isExpired && styles.expiredText]}>
+                  {new Date(item.expiration_date).toLocaleDateString()}
+                </Text>
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: categoryColor + '20' }]}
+                    onPress={() => handleEdit(item)}
+                  >
+                    <Ionicons name="pencil" size={20} color={categoryColor} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, { backgroundColor: '#ff444420' }]}
+                    onPress={() => {
+                      Alert.alert(
+                        "Delete Item",
+                        "Are you sure you want to delete this item?",
+                        [
+                          {
+                            text: "Cancel",
+                            style: "cancel"
+                          },
+                          {
+                            text: "Delete",
+                            onPress: () => removeItem(category.title, item.food_id),
+                            style: "destructive"
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }}
+        />
+      </View>
+    </Animated.View>
+  );
+};
 
 const PantryScreen = () => {
   const [pantryData, setPantryData] = useState([]);
@@ -295,186 +431,151 @@ const PantryScreen = () => {
     }
   }, []);
 
+  const renderItem = ({ item }) => (
+    <CategorySection 
+      category={item} 
+      handleEdit={handleEdit} 
+      removeItem={removeItem} 
+    />
+  );
+
   return (
-    <ScrollView 
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <View>
+    <View style={styles.container}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#0000ff" />
-            <Text style={styles.loadingText}>Loading pantry data...</Text>
+            <ActivityIndicator size="large" color="#4c669f" />
+            <Text style={styles.loadingText}>Loading your pantry...</Text>
           </View>
         ) : error ? (
           <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={48} color="#ff4444" />
             <Text style={styles.errorText}>{error}</Text>
-            <Button title="Retry" onPress={fetchData} />
+            <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
+              <Text style={styles.retryButtonText}>Try Again</Text>
+            </TouchableOpacity>
           </View>
         ) : (
           <FlatList
             data={pantryData}
-            scrollEnabled={false}
+            renderItem={renderItem}
             keyExtractor={(item) => item.title}
-            renderItem={({ item }) => (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>{item.title}</Text>
-                {/* Table Header */}
-                <View style={styles.headerRow}>
-                  <Text style={[styles.cell, styles.header]}>item</Text>
-                  <Text style={[styles.cell, styles.header]}>Date Added</Text>
-                  <Text style={[styles.cell, styles.header]}>Expiry Date</Text>
-                  <Text style={[styles.cell, styles.header]}>Actions</Text>
-                </View>
-                {/* Table Content */}
-                <FlatList
-                  data={item.data}
-                  keyExtractor={(subItem) => subItem.food_id.toString()}
-                  renderItem={({ item: subItem }) => {
-                    const isItemExpired = isExpired(subItem.expiration_date);
-                    return (
-                      <View style={[styles.row, isItemExpired && styles.expiredRow]}>
-                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{subItem.name}</Text>
-                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{new Date(subItem.purchase_date).toISOString().split("T")[0]}</Text>
-                        <Text style={[styles.cell, isItemExpired && styles.expiredText]}>{new Date(subItem.expiration_date).toISOString().split("T")[0]}</Text>
-                        <View style={styles.actions}>
-                          <TouchableOpacity
-                            onPress={() => handleEdit(subItem)}
-                          >
-                            <Ionicons name={"pencil"} size={18} color={isItemExpired ? "red" : "black"} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => {
-                              Alert.alert(
-                                "Delete Item",
-                                "Are you sure you want to delete this item?",
-                                [
-                                  {
-                                    text: "Cancel",
-                                    style: "cancel"
-                                  },
-                                  {
-                                    text: "Delete",
-                                    onPress: () => removeItem(item.title, subItem.food_id),
-                                    style: "destructive"
-                                  }
-                                ]
-                              );
-                            }}
-                          >
-                            <Ionicons name={"trash-outline"} size={18} color={isItemExpired ? "red" : "black"} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  }}
-                />
-              </View>
-            )}
+            scrollEnabled={false}
+            contentContainerStyle={styles.flatListContent}
           />
         )}
-        <TouchableOpacity
-          onPress={() => setModalVisible(true)}
-          style={styles.addBtn}
-        >
-          <Ionicons name={"add-circle"} size={30} color={"black"} />
-        </TouchableOpacity>
+      </ScrollView>
 
-        <Modal visible={modalVisible} animationType="slide" transparent={true}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{isEditing ? "Edit Food Item" : "Add Food Item"}</Text>
-              
-              <ScrollView style={styles.modalScroll}>
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Name</Text>
-                  <TextInput 
-                    style={[styles.input, formErrors.name && styles.inputError]} 
-                    placeholder="Enter item name" 
-                    onChangeText={(text) => handleChange("name", text)} 
-                    value={formData.name}
-                  />
-                  {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
-                </View>
+      <TouchableOpacity
+        style={styles.addButton}
+        onPress={() => setModalVisible(true)}
+      >
+        <View style={styles.addButtonContent}>
+          <Ionicons name="add" size={30} color="#fff" />
+        </View>
+      </TouchableOpacity>
 
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Quantity</Text>
-                  <TextInput 
-                    style={[styles.input, formErrors.quantity && styles.inputError]} 
-                    placeholder="Enter quantity" 
-                    onChangeText={(text) => handleChange("quantity", text)} 
-                    value={formData.quantity} 
-                    keyboardType="numeric"
-                  />
-                  {formErrors.quantity && <Text style={styles.errorText}>{formErrors.quantity}</Text>}
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Category</Text>
-                  <Dropdown
-                    style={[styles.dropdown, formErrors.category_id && styles.inputError]}
-                    data={categories}
-                    labelField="label"
-                    valueField="value"
-                    placeholder="Select Category"
-                    value={formData.category_id}
-                    onChange={(item) => handleChange("category_id", item.value)}
-                  />
-                  {formErrors.category_id && <Text style={styles.errorText}>{formErrors.category_id}</Text>}
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Purchase Date</Text>
-                  <TouchableOpacity onPress={() => showDatePicker("purchase_date")}>
-                    <TextInput 
-                      style={[styles.input, formErrors.purchase_date && styles.inputError]} 
-                      placeholder="Select purchase date" 
-                      value={formData.purchase_date} 
-                      editable={false}
-                    />
-                  </TouchableOpacity>
-                  {formErrors.purchase_date && <Text style={styles.errorText}>{formErrors.purchase_date}</Text>}
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Expiry Date</Text>
-                  <TouchableOpacity onPress={() => showDatePicker("expiration_date")}>
-                    <TextInput 
-                      style={[styles.input, formErrors.expiration_date && styles.inputError]} 
-                      placeholder="Select expiry date" 
-                      value={formData.expiration_date} 
-                      editable={false}
-                    />
-                  </TouchableOpacity>
-                  {formErrors.expiration_date && <Text style={styles.errorText}>{formErrors.expiration_date}</Text>}
-                </View>
-
-                <View style={styles.formGroup}>
-                  <Text style={styles.label}>Storage Method</Text>
-                  <TextInput 
-                    style={[styles.input, formErrors.storage_method && styles.inputError]} 
-                    placeholder="Enter storage method" 
-                    onChangeText={(text) => handleChange("storage_method", text)} 
-                    value={formData.storage_method}
-                  />
-                  {formErrors.storage_method && <Text style={styles.errorText}>{formErrors.storage_method}</Text>}
-                </View>
-
-                <View style={styles.buttonContainer}>
-                  <Button title="Cancel" color="red" onPress={() => {
-                    setModalVisible(false);
-                    setFormErrors({});
-                  }} />
-                  <Button title={isEditing ? "Update" : "Add"} onPress={handleSubmit} />
-                </View>
-              </ScrollView>
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {isEditing ? "Edit Food Item" : "Add Food Item"}
+              </Text>
             </View>
+
+            <ScrollView style={styles.modalScroll}>
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Name</Text>
+                <TextInput 
+                  style={[styles.input, formErrors.name && styles.inputError]} 
+                  placeholder="Enter item name" 
+                  onChangeText={(text) => handleChange("name", text)} 
+                  value={formData.name}
+                />
+                {formErrors.name && <Text style={styles.errorText}>{formErrors.name}</Text>}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Quantity</Text>
+                <TextInput 
+                  style={[styles.input, formErrors.quantity && styles.inputError]} 
+                  placeholder="Enter quantity" 
+                  onChangeText={(text) => handleChange("quantity", text)} 
+                  value={formData.quantity} 
+                  keyboardType="numeric"
+                />
+                {formErrors.quantity && <Text style={styles.errorText}>{formErrors.quantity}</Text>}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Category</Text>
+                <Dropdown
+                  style={[styles.dropdown, formErrors.category_id && styles.inputError]}
+                  data={categories}
+                  labelField="label"
+                  valueField="value"
+                  placeholder="Select Category"
+                  value={formData.category_id}
+                  onChange={(item) => handleChange("category_id", item.value)}
+                />
+                {formErrors.category_id && <Text style={styles.errorText}>{formErrors.category_id}</Text>}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Purchase Date</Text>
+                <TouchableOpacity onPress={() => showDatePicker("purchase_date")}>
+                  <TextInput 
+                    style={[styles.input, formErrors.purchase_date && styles.inputError]} 
+                    placeholder="Select purchase date" 
+                    value={formData.purchase_date} 
+                    editable={false}
+                  />
+                </TouchableOpacity>
+                {formErrors.purchase_date && <Text style={styles.errorText}>{formErrors.purchase_date}</Text>}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Expiry Date</Text>
+                <TouchableOpacity onPress={() => showDatePicker("expiration_date")}>
+                  <TextInput 
+                    style={[styles.input, formErrors.expiration_date && styles.inputError]} 
+                    placeholder="Select expiry date" 
+                    value={formData.expiration_date} 
+                    editable={false}
+                  />
+                </TouchableOpacity>
+                {formErrors.expiration_date && <Text style={styles.errorText}>{formErrors.expiration_date}</Text>}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.label}>Storage Method</Text>
+                <TextInput 
+                  style={[styles.input, formErrors.storage_method && styles.inputError]} 
+                  placeholder="Enter storage method" 
+                  onChangeText={(text) => handleChange("storage_method", text)} 
+                  value={formData.storage_method}
+                />
+                {formErrors.storage_method && <Text style={styles.errorText}>{formErrors.storage_method}</Text>}
+              </View>
+
+              <View style={styles.buttonContainer}>
+                <Button title="Cancel" color="red" onPress={() => {
+                  setModalVisible(false);
+                  setFormErrors({});
+                }} />
+                <Button title={isEditing ? "Update" : "Add"} onPress={handleSubmit} />
+              </View>
+            </ScrollView>
           </View>
-        </Modal>
-      </View>
-    </ScrollView>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -485,75 +586,165 @@ const isExpired = (expiryDate) => {
 };
 
 const styles = StyleSheet.create({
-  container: { padding: 10 },
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  content: {
+    flex: 1,
+  },
+  flatListContent: {
+    padding: 16,
+    paddingTop: 20,
+  },
   section: {
     marginBottom: 20,
+    borderRadius: 15,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  sectionHeader: {
+    padding: 15,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 70,
+  },
+  sectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  sectionHeaderRight: {
+    marginLeft: 10,
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 10,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  itemCount: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  itemCountBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  itemCountBadgeText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tableContainer: {
+    padding: 10,
   },
   headerRow: {
-    flexDirection: "row",
-    backgroundColor: "#ddd",
-    paddingVertical: 8,
+    flexDirection: 'row',
+    paddingVertical: 10,
     borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  headerCell: {
+    flex: 1,
+    fontWeight: 'bold',
+    color: '#666',
+    textAlign: 'center',
   },
   row: {
-    flexDirection: "row",
+    flexDirection: 'row',
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    paddingVertical: 8,
-    alignItems: "center",
+    borderBottomColor: '#eee',
+    alignItems: 'center',
   },
   cell: {
     flex: 1,
-    textAlign: "center",
-    fontSize: 14,
-  },
-  header: {
-    fontWeight: "bold",
-  },
-  expired: {
-    color: "red",
+    textAlign: 'center',
+    color: '#333',
   },
   actions: {
-    flexDirection: "row",
     flex: 1,
-    justifyContent: "space-evenly",
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
-  editBtn: {
-    backgroundColor: "blue",
-    padding: 5,
-    borderRadius: 5,
+  actionButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
   },
-  removeBtn: {
-    backgroundColor: "red",
-    padding: 5,
-    borderRadius: 5,
+  expiredRow: {
+    backgroundColor: '#fff0f0',
   },
-  addBtn: {
-    alignItems: "flex-end",
-    justifyContent: "flex-end",
+  expiringSoonRow: {
+    backgroundColor: '#fff8e1',
   },
-  btnText: {
-    color: "#fff",
-    fontSize: 12,
+  expiredText: {
+    color: '#ff4444',
   },
-  addButton: { position: "absolute", bottom: 20, right: 20 },
-  modalContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" },
-  modalContent: { 
-    backgroundColor: "white", 
-    padding: 20, 
-    borderRadius: 10, 
-    width: "90%",
+  addButton: {
+    position: 'absolute',
+    bottom: 30,
+    right: 30,
+    width: 45,
+    height: 45,
+    borderRadius: 25,
+    backgroundColor: '#4c669f',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  addButtonContent: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '90%',
     maxHeight: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
   },
-  modalTitle: { fontSize: 20, fontWeight: "bold", marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 10, marginBottom: 10, width: "100%" },
-  dropdown: { borderWidth: 1, borderColor: "#ccc", padding: 10, marginBottom: 10, width: "100%", borderRadius: 5 },
-  buttonContainer: { flexDirection: "row", justifyContent: "space-between" },
+  modalHeader: {
+    padding: 20,
+    backgroundColor: '#4c669f',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  modalScroll: {
+    padding: 20,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -572,27 +763,51 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   errorText: {
-    color: 'red',
+    marginTop: 10,
     fontSize: 16,
+    color: '#ff4444',
     textAlign: 'center',
-    marginBottom: 20,
   },
-  expiredRow: {
-    backgroundColor: '#fff0f0',
+  retryButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: '#4c669f',
+    borderRadius: 5,
   },
-  expiredText: {
-    color: 'red',
-  },
-  modalScroll: {
-    maxHeight: '80%',
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 16,
   },
   formGroup: {
-    marginBottom: 15,
+    marginBottom: 10,
   },
   label: {
     fontSize: 16,
     marginBottom: 5,
     fontWeight: '500',
+  },
+  input: { 
+    borderWidth: 1, 
+    borderColor: "#ccc", 
+    padding: 10, 
+    marginBottom: 10, 
+    width: "100%",
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
+  dropdown: { 
+    borderWidth: 1, 
+    borderColor: "#ccc", 
+    padding: 10, 
+    marginBottom: 10, 
+    width: "100%", 
+    borderRadius: 5,
+    backgroundColor: '#fff',
+  },
+  buttonContainer: { 
+    flexDirection: "row", 
+    justifyContent: "space-between",
+    marginTop: 10
   },
   inputError: {
     borderColor: 'red',

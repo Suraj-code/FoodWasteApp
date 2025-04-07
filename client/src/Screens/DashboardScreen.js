@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Dimensions, Animated, TouchableOpacity } from 'react-native';
 import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
 import { getFoodItems } from '../../config';
 import { getCategoryNames } from '../../config';
@@ -276,6 +276,7 @@ const styles = StyleSheet.create({
     categoryCard: {
         borderRadius: 16,
         elevation: 4,
+        marginBottom: 16,
     },
     categoryHeader: {
         flexDirection: 'row',
