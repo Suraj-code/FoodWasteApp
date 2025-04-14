@@ -1,20 +1,90 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, ActivityIndicator, Dimensions, Animated, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ScrollView, ActivityIndicator, Dimensions, Animated, TouchableOpacity, Modal, Alert } from 'react-native';
 import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getFoodItems } from '../../config';
-import { getCategoryNames } from '../../config';
 import { useFocusEffect } from '@react-navigation/native';
-// import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const DashboardHeader = ({ navigation }) => {
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => setShowDropdown(false)
+        },
+        {
+          text: "Logout",
+          onPress: async () => {
+            try {
+              // Clear all stored data
+              await AsyncStorage.clear();
+              // Navigate to login screen
+              navigation.navigate('Login');
+            } catch (error) {
+              console.error('Error during logout:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
+  return (
+    <View style={styles.headerContainer}>
+      <View style={styles.headerContent}>
+        <Ionicons name="home" size={24} color="#fff" style={styles.headerIcon} />
+        <Text style={styles.headerTitle}>Dashboard</Text>
+      </View>
+      <TouchableOpacity 
+        onPress={() => setShowDropdown(!showDropdown)}
+        style={styles.profileButton}
+      >
+        <Ionicons name="person-circle-outline" size={24} color="#fff" />
+      </TouchableOpacity>
+
+      <Modal
+        visible={showDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDropdown(false)}
+        >
+          <View style={styles.dropdownContainer}>
+            <TouchableOpacity 
+              style={styles.dropdownItem}
+              onPress={handleLogout}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#ff4444" />
+              <Text style={[styles.dropdownText, { color: '#ff4444' }]}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+};
 
 function DashboardScreen({ navigation }) {
     const [pantryData, setPantryData] = useState([]);
-    const [categories, setCategories] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
-    const theme = useTheme(); //useTheme is used to get the theme of the app
+    const theme = useTheme();
 
     useFocusEffect(
-        React.useCallback(() => { //useCallback is used to prevent the function from being recreated on every render, optimizing performance
+        React.useCallback(() => {
             fetchData();
         }, [])
     );
@@ -24,23 +94,17 @@ function DashboardScreen({ navigation }) {
             setIsLoading(true);
             setError(null);
             const foodItems = await getFoodItems();
-            const categoryData = await getCategoryNames();
             
-            if (foodItems && categoryData) {
+            if (foodItems) {
                 setPantryData(foodItems);
-                setCategories(categoryData);
             } else {
                 throw new Error("Failed to fetch data");
             }
         } catch (err) {
             console.error("Error fetching dashboard data:", err);
             
-            // Handle authentication errors
             if (err.message.includes('401')) {
                 setError("Please log in to view your pantry data");
-                // Usually means the token has expired, so we need to log in again
-                // Optionally navigate to login screen
-                // navigation.navigate('Login');
             } else {
                 setError("Failed to load dashboard data. Please try again.");
             }
@@ -58,13 +122,12 @@ function DashboardScreen({ navigation }) {
             totalItems: pantryData.length,
             expiredItems: 0,
             soonToExpire: 0,
-            categoryCounts: {},
-            totalValue: 0
+            totalValue: 0,
+            categoryCounts: {}
         };
 
         pantryData.forEach(item => {
             const expiryDate = new Date(item.expiration_date);
-            const purchaseDate = new Date(item.purchase_date);
             
             if (expiryDate < today) {
                 stats.expiredItems++;
@@ -74,10 +137,10 @@ function DashboardScreen({ navigation }) {
                 stats.soonToExpire++;
             }
 
-            const categoryName = categories.find(cat => cat.category_id === item.category_id)?.name || 'Uncategorized';
-            stats.categoryCounts[categoryName] = (stats.categoryCounts[categoryName] || 0) + 1;
-
             stats.totalValue += item.quantity || 0;
+
+            const categoryName = item.category_name || 'Uncategorized';
+            stats.categoryCounts[categoryName] = (stats.categoryCounts[categoryName] || 0) + 1;
         });
 
         return stats;
@@ -119,18 +182,9 @@ function DashboardScreen({ navigation }) {
     const stats = calculateStats();
 
     return (
-        <ScrollView style={styles.container}>
-            {/* Modern Header */}
-            {/* <LinearGradient
-                colors={['#4c669f', '#3b5998', '#192f6a']}
-                style={styles.header}
-            >
-                <Text style={styles.headerTitle}>Pantry Overview</Text>
-                <Text style={styles.headerSubtitle}>Your food inventory at a glance</Text>
-            </LinearGradient> */}
-
-            <View style={styles.content}>
-                {/* Stats Grid */}
+        <View style={styles.container}>
+            <DashboardHeader navigation={navigation} />
+            <ScrollView style={styles.content}>
                 <View style={styles.statsGrid}>
                     <Card style={[styles.statCard, styles.totalCard]}>
                         <Card.Content>
@@ -177,31 +231,8 @@ function DashboardScreen({ navigation }) {
                         </Card.Content>
                     </Card>
                 </View>
-
-                {/* Category Breakdown */}
-                <Card style={styles.categoryCard}>
-                    <Card.Content>
-                        <View style={styles.categoryHeader}>
-                            <IconButton
-                                icon="format-list-bulleted"
-                                size={24}
-                                iconColor="#4c669f"
-                            />
-                            <Text style={styles.categoryTitle}>Category Breakdown</Text>
-                        </View>
-                        {Object.entries(stats.categoryCounts).map(([category, count]) => (
-                            <View key={category} style={styles.categoryRow}>
-                                <View style={styles.categoryInfo}>
-                                    <View style={styles.categoryDot} />
-                                    <Text style={styles.categoryName}>{category}</Text>
-                                </View>
-                                <Text style={styles.categoryCount}>{count}</Text>
-                            </View>
-                        ))}
-                    </Card.Content>
-                </Card>
-            </View>
-        </ScrollView>
+            </ScrollView>
+        </View>
     );
 }
 
@@ -213,24 +244,33 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#f5f5f5',
     },
-    header: {
-        padding: 24,
-        paddingTop: 48,
-        borderBottomLeftRadius: 24,
-        borderBottomRightRadius: 24,
-        marginBottom: 16,
+    headerContainer: {
+        backgroundColor: '#4c669f',
+        height: 60,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+    },
+    headerContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    headerIcon: {
+        marginRight: 8,
     },
     headerTitle: {
-        fontSize: 28,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 8,
-    },
-    headerSubtitle: {
-        fontSize: 16,
-        color: 'rgba(255, 255, 255, 0.8)',
     },
     content: {
+        flex: 1,
         padding: 16,
     },
     statsGrid: {
@@ -264,58 +304,14 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     statValue: {
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 4,
+        marginBottom: 2,
     },
     statLabel: {
         fontSize: 12,
         color: 'rgba(255, 255, 255, 0.8)',
-    },
-    categoryCard: {
-        borderRadius: 16,
-        elevation: 4,
-        marginBottom: 16,
-    },
-    categoryHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    categoryTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#333',
-        marginLeft: 8,
-    },
-    categoryRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingVertical: 8,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    categoryInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    categoryDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: '#4c669f',
-        marginRight: 8,
-    },
-    categoryName: {
-        fontSize: 14,
-        color: '#666',
-    },
-    categoryCount: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: '#333',
     },
     loadingContainer: {
         flex: 1,
@@ -345,6 +341,36 @@ const styles = StyleSheet.create({
     loginButton: {
         marginTop: 16,
         marginLeft: 16,
+    },
+    profileButton: {
+        padding: 8,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    },
+    dropdownContainer: {
+        position: 'absolute',
+        top: 60,
+        right: 16,
+        backgroundColor: '#fff',
+        borderRadius: 8,
+        elevation: 5,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 3.84,
+        padding: 8,
+        minWidth: 150,
+    },
+    dropdownItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+    },
+    dropdownText: {
+        marginLeft: 8,
+        fontSize: 16,
     },
 });
 

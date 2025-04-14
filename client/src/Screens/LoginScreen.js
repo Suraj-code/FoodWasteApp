@@ -66,6 +66,10 @@ function LoginScreen(props) {
 
         setIsLoading(true);
         try {
+            // Clear any existing data before logging in
+            await AsyncStorage.removeItem('pantryData');
+            await AsyncStorage.removeItem('categories');
+
             const response = await axios.post('http://10.0.2.2:5000/login', {
                 email,
                 password

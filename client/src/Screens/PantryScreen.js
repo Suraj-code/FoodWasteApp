@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, Button, ScrollView, Alert, ActivityIndicator, RefreshControl, Animated } from "react-native";
-import { Text, useTheme } from "react-native-paper";
+import { FlatList, View, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Alert, ActivityIndicator, RefreshControl, Animated } from "react-native";
+import { Text, Card, useTheme, IconButton, Button } from 'react-native-paper';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Dropdown } from "react-native-element-dropdown";
 import { getFoodItems } from "../../config";
@@ -10,6 +10,8 @@ import { deleteFoodItem } from "../../config";
 import { updateFoodItem } from "../../config";
 // import { DateTimePicker } from "@react-native-community/datetimepicker";
 import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 // Add color mapping for categories
 const categoryColors = {
@@ -169,6 +171,8 @@ const PantryScreen = () => {
   const [error, setError] = useState(null);
   const [formErrors, setFormErrors] = useState({});
   const [refreshing, setRefreshing] = useState(false);
+  const navigation = useNavigation();
+  const theme = useTheme();
 
   //fetch data from the backend
   useEffect(() => {
@@ -182,6 +186,16 @@ const PantryScreen = () => {
       setError(null);
       console.log("Fetching data...");
       
+      // Clear any cached data before fetching
+      setPantryData([]);
+      setCategories([]);
+      
+      // Get the current token
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        throw new Error("No authentication token found. Please log in again.");
+      }
+
       const data = await getFoodItems();
       console.log("Fetched Food Items:", data);
 
@@ -197,7 +211,13 @@ const PantryScreen = () => {
       }
     } catch (err) {
       console.error("Error in fetchData:", err);
-      setError("Failed to fetch pantry data. Please try again later.");
+      if (err.message.includes("No authentication token")) {
+        setError("Session expired. Please log in again.");
+        // Optionally navigate to login screen
+        navigation.navigate('Login');
+      } else {
+        setError("Failed to fetch pantry data. Please try again later.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -265,23 +285,42 @@ const PantryScreen = () => {
       return;
     }
 
-    if (isEditing) {
-      await updateItem(editFoodId, formData);
-      setModalVisible(false);
-    } else {
-      const newItem = await addFoodItem(formData);
-      console.log("New Food Item:", newItem);
-      
-      setPantryData((prevData) =>
-        prevData.map((category) =>
-          category.title === newItem.title
-            ? { ...category, data: [...category.data, newItem] }
-            : category
-        )
-      );
-      setModalVisible(false);
-      setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
-      setFormErrors({});
+    try {
+      if (isEditing) {
+        await updateItem(editFoodId, formData);
+        setModalVisible(false);
+      } else {
+        const newItem = await addFoodItem(formData);
+        console.log("New Food Item:", newItem);
+        
+        // Find the category name for the new item
+        const categoryName = categories.find(cat => cat.value === formData.category_id)?.label || "Uncategorized";
+        
+        setPantryData(prevData => {
+          // Check if the category already exists
+          const categoryIndex = prevData.findIndex(cat => cat.title === categoryName);
+          
+          if (categoryIndex !== -1) {
+            // Category exists, add the new item to it
+            const updatedData = [...prevData];
+            updatedData[categoryIndex] = {
+              ...updatedData[categoryIndex],
+              data: [...updatedData[categoryIndex].data, newItem]
+            };
+            return updatedData;
+          } else {
+            // Category doesn't exist, create a new category with the item
+            return [...prevData, { title: categoryName, data: [newItem] }];
+          }
+        });
+
+        setModalVisible(false);
+        setFormData({ name: "", quantity: "", category_id: "", purchase_date: "", expiration_date: "", storage_method: "" });
+        setFormErrors({});
+      }
+    } catch (error) {
+      console.error("Error in handleSubmit:", error);
+      Alert.alert("Error", "Failed to save the item. Please try again.");
     }
   };
 
@@ -347,12 +386,12 @@ const PantryScreen = () => {
 
   const handleEdit = (item) => {
     setFormData({
-      name: item.name,
-      quantity: item.quantity.toString(),
-      category_id: item.category_id.toString(),
-      purchase_date: item.purchase_date,
-      expiration_date: item.expiration_date,
-      storage_method: item.storage_method,
+      name: item.name || '',
+      quantity: item.quantity ? item.quantity.toString() : '',
+      category_id: item.category_id ? item.category_id.toString() : '',
+      purchase_date: item.purchase_date || '',
+      expiration_date: item.expiration_date || '',
+      storage_method: item.storage_method || '',
     });
     setEditFoodId(item.food_id); // Store the ID for update
     setIsEditing(true);
@@ -394,15 +433,6 @@ const PantryScreen = () => {
     }
   };
 
-  // const handleDateChange = (field, selectedDate) => {
-  //   console.log("Selected Date:", selectedDate);
-  //   setFormData((prevData) => ({
-  //     ...prevData, // Keep existing data
-  //     [field]: selectedDate.toISOString().split("T")[0], // Format date to YYYY-MM-DD
-  //   }));
-  //   setIsDPVisible(false);
-  // };
-  
   const showDatePicker = (field) => {
     DateTimePickerAndroid.open({
       value: date,
@@ -418,58 +448,62 @@ const PantryScreen = () => {
       },
     });
   };
-  
-
-  const onRefresh = React.useCallback(async () => {
-    setRefreshing(true);
-    try {
-      await fetchData();
-    } catch (error) {
-      console.error("Error refreshing data:", error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
-  const renderItem = ({ item }) => (
-    <CategorySection 
-      category={item} 
-      handleEdit={handleEdit} 
-      removeItem={removeItem} 
-    />
-  );
 
   return (
     <View style={styles.container}>
-      <ScrollView 
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#4c669f" />
-            <Text style={styles.loadingText}>Loading your pantry...</Text>
-          </View>
-        ) : error ? (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={48} color="#ff4444" />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={fetchData}>
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <FlatList
-            data={pantryData}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.title}
-            scrollEnabled={false}
-            contentContainerStyle={styles.flatListContent}
-          />
-        )}
-      </ScrollView>
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={styles.loadingText}>Loading your pantry...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
+          <Button 
+            mode="contained" 
+            onPress={fetchData}
+            style={styles.retryButton}
+          >
+            Retry
+          </Button>
+        </View>
+      ) : pantryData.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="basket-outline" size={64} color={theme.colors.primary} />
+          <Text style={styles.emptyTitle}>Your Pantry is Empty</Text>
+          <Text style={styles.emptySubtitle}>
+            Start by adding some food items to track your inventory
+          </Text>
+          {/* <Button 
+            mode="contained" 
+            onPress={() => setModalVisible(true)}
+            style={styles.addButton}
+            icon="plus"
+          >
+            "Add Your First Item"
+          </Button> */}
+        </View>
+      ) : (
+        <FlatList
+          data={pantryData}
+          keyExtractor={(item) => item.title}
+          renderItem={({ item }) => (
+            <CategorySection
+              category={item}
+              handleEdit={handleEdit}
+              removeItem={removeItem}
+            />
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={fetchData}
+              colors={[theme.colors.primary]}
+            />
+          }
+        />
+      )}
 
       <TouchableOpacity
         style={styles.addButton}
@@ -564,12 +598,26 @@ const PantryScreen = () => {
                 {formErrors.storage_method && <Text style={styles.errorText}>{formErrors.storage_method}</Text>}
               </View>
 
-              <View style={styles.buttonContainer}>
-                <Button title="Cancel" color="red" onPress={() => {
-                  setModalVisible(false);
-                  setFormErrors({});
-                }} />
-                <Button title={isEditing ? "Update" : "Add"} onPress={handleSubmit} />
+              <View style={styles.modalButtons}>
+                <Button 
+                  mode="outlined" 
+                  onPress={() => {
+                    setModalVisible(false);
+                    setFormData({ name: '', quantity: '', category_id: '', purchase_date: '', expiration_date: '', storage_method: '' });
+                    setIsEditing(false);
+                  }}
+                  style={[styles.modalButton, { borderColor: 'red' }]}
+                  textColor="red"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  mode="contained" 
+                  onPress={handleSubmit}
+                  style={styles.modalButton}
+                >
+                  {isEditing ? "Update" : "Add"}
+                </Button>
               </View>
             </ScrollView>
           </View>
@@ -598,7 +646,8 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 10,
+    margin: 10,
     borderRadius: 15,
     overflow: 'hidden',
     backgroundColor: '#fff',
@@ -804,14 +853,38 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#fff',
   },
-  buttonContainer: { 
-    flexDirection: "row", 
-    justifyContent: "space-between",
-    marginTop: 10
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 5,
+  },
+  modalButton: {
+    flex: 1,
+    marginHorizontal: 5,
   },
   inputError: {
     borderColor: 'red',
     borderWidth: 1,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#fff',
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 16,
+    marginBottom: 8,
+    color: '#333',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#666',
+    marginBottom: 24,
   },
 });
 

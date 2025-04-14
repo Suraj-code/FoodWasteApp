@@ -140,20 +140,25 @@ def login():
 @app.route('/get_user', methods=['GET'])
 @jwt_required()
 def get_users():
-    user_id = get_jwt_identity
-    list_of_users = User.query.all()
-    result = []
-    for u in list_of_users:
-        result.append({
-            'email': u.email,
-            'first_name': u.first_name,
-            'last_name': u.last_name
-        })
+    current_user_id = get_jwt_identity()
+    # Only return the current user's information
+    user = User.query.filter_by(user_id=current_user_id).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    
+    result = {
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name
+    }
     return jsonify(result)
 
 #Get Category names
 @app.route('/get_category', methods=['GET'])
+@jwt_required()
 def get_category():
+    current_user_id = get_jwt_identity()
+    # Categories are shared across users, but we'll still require authentication
     category_names = Category.query.all()
     result = []
     for item in category_names:
@@ -168,7 +173,7 @@ def get_category():
 @jwt_required()
 def get_food_items():
     user_id = get_jwt_identity()
-    food_items = FoodItem.query.all()
+    food_items = FoodItem.query.filter_by(user_id=user_id).all()
     result = []
     for item in food_items:
         result.append({
@@ -188,15 +193,11 @@ def get_food_items():
 @app.route('/food_items', methods=['POST'])
 @jwt_required()
 def add_food_items():
-
     user_id = get_jwt_identity()
-
     if not user_id:
         return jsonify({"error": "User not logged in"}), 401
 
     data = request.get_json()
-
-    # Ensure required fields are provided
     required_fields = ["name", "quantity", "category_id", "purchase_date", "expiration_date", "storage_method"]
     for field in required_fields:
         if field not in data:
@@ -213,26 +214,26 @@ def add_food_items():
     )
     db.session.add(new_food_item)
     db.session.commit()
-    return jsonify({'name': new_food_item.name,
-                    'quantity': new_food_item.quantity,
-                    'category_id': new_food_item.category_id,
-                    'purchase_date': new_food_item.purchase_date,
-                    'expiration_date': new_food_item.expiration_date,
-                    'storage_method': new_food_item.storage_method
-                    }), 201
+    return jsonify({
+        'name': new_food_item.name,
+        'quantity': new_food_item.quantity,
+        'category_id': new_food_item.category_id,
+        'purchase_date': new_food_item.purchase_date,
+        'expiration_date': new_food_item.expiration_date,
+        'storage_method': new_food_item.storage_method
+    }), 201
 
 #Route to update a food item
 @app.route('/update_food_item/<int:food_id>', methods=['PUT'])
 @jwt_required()
 def update_food_item(food_id):
-    food_item = FoodItem.query.get(food_id)
+    user_id = get_jwt_identity()
+    food_item = FoodItem.query.filter_by(food_id=food_id, user_id=user_id).first()
 
     if not food_item:
-        return jsonify({'error': 'Food item not found'}), 404
+        return jsonify({'error': 'Food item not found or unauthorized'}), 404
 
     data = request.get_json()
-
-    # Update only if key exists in request data
     if 'name' in data:
         food_item.name = data['name']
     if 'quantity' in data:
@@ -246,27 +247,28 @@ def update_food_item(food_id):
     if 'storage_method' in data:
         food_item.storage_method = data['storage_method']
 
-    db.session.commit()  # Save changes to DB
-
-    return jsonify({'name': food_item.name,
-                    'qunatity': food_item.quantity,
-                    'category_id': food_item.category_id,
-                    'purchase_date': food_item.purchase_date,
-                    'expiration_date': food_item.expiration_date,
-                    'storage_method': food_item.storage_method}), 200
+    db.session.commit()
+    return jsonify({
+        'name': food_item.name,
+        'quantity': food_item.quantity,
+        'category_id': food_item.category_id,
+        'purchase_date': food_item.purchase_date,
+        'expiration_date': food_item.expiration_date,
+        'storage_method': food_item.storage_method
+    }), 200
 
 @app.route('/delete_food_items/<int:food_id>', methods=['DELETE'])
 @jwt_required()
 def delete_food_item(food_id):
-    food_item = FoodItem.query.get(food_id)
+    user_id = get_jwt_identity()
+    food_item = FoodItem.query.filter_by(food_id=food_id, user_id=user_id).first()
 
     if food_item:
-        # Delete the food item from the database
         db.session.delete(food_item)
         db.session.commit()
         return jsonify({'message': 'Food item deleted successfully'}), 200
     
-    return jsonify({'message': 'Food item not found'}), 404
+    return jsonify({'message': 'Food item not found or unauthorized'}), 404
 
 
 # 4️⃣ Run the App
