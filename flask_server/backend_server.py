@@ -54,6 +54,7 @@ class FoodItem(db.Model):
     name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.category_id'))
+    category = db.relationship('Category', backref='food_items')
     purchase_date = db.Column(db.Date)
     expiration_date = db.Column(db.Date)
     storage_method = db.Column(db.String(50))
@@ -182,6 +183,7 @@ def get_food_items():
             'name': item.name,
             'quantity': item.quantity,
             'category_id': item.category_id,
+            'category_name': item.category.name if item.category else "Uncategorized",
             'purchase_date': item.purchase_date,
             'expiration_date': item.expiration_date,
             'storage_method': item.storage_method,
